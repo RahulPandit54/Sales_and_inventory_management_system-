@@ -1,0 +1,292 @@
+import csv
+import mysql.connector
+
+print('''
+-
+welcome to sales and management 
+-
+''')
+
+#  Database connection 
+ss = mysql.connector.connect(host="localhost", user="root", password="aloke_2008")
+c = ss.cursor()
+
+#  Create DB and tables if not exists 
+c.execute("create database if not exists sales")
+c.execute("use sales")
+c.execute('''create table if not exists login(
+    username varchar(50),
+    password varchar(30)
+)''')
+c.execute('''create table if not exists stock(
+    pcode int primary key,
+    pnm varchar(50),
+    quantity int not null,
+    price int
+)''')
+c.execute('''create table if not exists purchase(
+    pcode int,
+    pnm varchar(50),
+    quantity int not null
+)''')
+ss.commit()
+
+#  Ensure default admin exists 
+z=0
+c.execute("select * from login")
+for i in c:
+    z+=1
+if z==0:
+    c.execute("insert into login values('sales','mnc')")
+    ss.commit()
+ 
+
+def admin_menu():
+    # admin authenticated; menu loop
+    while True:
+        print('''
+1. add new item
+2. update price
+3. delete item
+4. display all items
+5. change password
+6. log out
+''')
+        s = int(input("enter your choice: "))
+        if s == 1:
+            add_new_item()
+        elif s == 2:
+            update_price()
+        elif s == 3:
+            delete_item()
+        elif s == 4:
+            display_all_items()
+        elif s == 5:
+            change_password()
+        elif s == 6:
+            break
+        else:
+            print("Invalid choice in admin menu")
+
+def add_new_item():
+    l2 = "y"
+    while l2 == "y":
+        obj = open("sales.csv", "a", newline='')
+        re = csv.writer(obj, delimiter='|')
+        pc = int(input("enter product code: "))
+        pn = input("enter product name: ")
+        qua = int(input("quantity: "))
+        pr = int(input("price: "))
+        c.execute("insert into stock values('"+str(pc)+"','"+pn+"','"+str(qua)+"','"+str(pr)+"')")
+        ss.commit()
+
+        # write to csv (append)
+        re.writerow([pc, pn, qua, pr])
+        obj.close()
+
+        # call csv.reader 
+        obj_read = open("sales.csv", "r", newline='')
+        try:
+            csv_reader = csv.reader(obj_read, delimiter='|')
+            print("record added successfully")
+        except:
+            obj_read.close()
+
+        l2 = input("do you want to add more data y/n: ").lower()
+
+def update_price():
+    l2 = "y"
+    while l2 == "y":
+        obj = open("sales.csv", "a", newline='')
+        re = csv.writer(obj, delimiter='|')
+
+        pc = int(input("enter product code: "))
+        nwpr = int(input("new price: "))
+        c.execute("update stock set price='"+str(nwpr)+"' where pcode='"+str(pc)+"'")
+        ss.commit()
+
+        
+        re.writerow(["UPDATE_PRICE", pc, nwpr])
+        obj.close()
+
+        obj_read = open("sales.csv", "r", newline='')
+        try:
+            csv.reader(obj_read, delimiter='|')
+            print("record updated successfully")
+        except:
+            obj_read.close()
+
+        l2 = input("do you want to update more data y/n: ").lower()
+
+def delete_item():
+    l2 = "y"
+    while l2 == "y":
+        obj = open("sales.csv", "a", newline='')
+        re = csv.writer(obj, delimiter='|')
+
+        pc = int(input("enter product code to delete: "))
+        # delete the product 
+        c.execute("delete from stock where pcode='"+str(pc)+"'")
+        ss.commit()
+
+        # deletion in csv
+        re.writerow(["DELETE", pc])
+        obj.close()
+
+        obj_read = open("sales.csv", "r", newline='')
+        try:
+            csv.reader(obj_read, delimiter='|')
+            print("record deleted successfully")
+        except:
+            obj_read.close()
+
+        l2 = input("do you want to delete more items y/n: ").lower()
+
+def display_all_items():
+    obj = open("sales.csv", "a", newline='')
+    re = csv.writer(obj, delimiter='|')
+    c.execute("select * from stock")
+    print("pcode || pname || price || quantity")
+    for row in c:
+        print(row)
+    obj.close()
+    obj_read = open("sales.csv", "r", newline='')
+    try:
+        csv.reader(obj_read, delimiter='|')
+        print("record displayed successfully")
+    except:
+        obj_read.close()
+
+       
+
+def change_password():
+        obj = open("sales.csv", "a", newline='')
+        re = csv.writer(obj, delimiter='|')
+        op = input("enter old password: ")
+        c.execute("select * from login")
+        for i in c:
+            if i[1]==op:
+                np = input("enter new password: ")
+                c.execute("update login set password='"+str(np)+"'")
+                ss.commit()
+                print("changed successfully")       
+                re.writerow(["CHANGE_PASS"])
+            else:
+                print("wrong password")
+
+        obj.close()
+        obj_read = open("sales.csv", "r", newline='')
+        try:
+            csv.reader(obj_read, delimiter='|')
+        except:
+            obj_read.close()
+
+        
+
+#  Customer section 
+def customer_section():
+    q = 0
+    while True:
+        print('''
+1. item bucket
+2. payment
+3. view available items
+4. go back
+''')
+        s = int(input("enter your choice: "))
+        if s == 1:
+            # add items to bucket
+            obj = open("sales.csv", "a", newline='')
+            re = csv.writer(obj, delimiter='|')
+            pc = int(input("enter product code: "))
+            nm = input("enter product name: ")
+            qua = int(input("quantity: "))
+            c.execute("select * from stock where pcode='"+str(pc)+"'")
+            for i in c:
+                if i is None:
+                    print("product not found")
+                    obj.close()
+                    continue
+            available_qty = i[2]
+            price = i[3]
+
+            # check stock enough (prevents negative stock)
+            if qua > available_qty:
+                print("Not enough stock. Available:", available_qty)
+                obj.close()
+                continue
+            nq = available_qty - qua
+            amt = price * qua
+            q += amt
+            c.execute("update stock set quantity='"+str(nq)+"' where pcode='"+str(pc)+"'")
+            c.execute("insert into purchase values('"+str(pc)+"','"+(nm)+"','"+str(qua)+"')")
+            ss.commit()
+            re.writerow([pc, nm, qua, "PURCHASE"])
+            obj.close()
+            obj_read = open("sales.csv", "r", newline='')
+            try:
+                csv.reader(obj_read, delimiter='|')
+            except:
+                obj_read.close()
+
+            cont = input("do you want to continue in customer section y/n: ").lower()
+            if cont != "y":
+                pass
+
+        elif s == 2:
+            # payment - show total amount
+            print("amount to be paid:", q)
+            cont = input("do you want to continue in customer section y/n: ").lower()
+            if cont != "y":
+                pass
+
+        elif s == 3:
+            # VIEW AVAILABLE ITEMS 
+            obj = open("sales.csv", "a", newline='')
+            re = csv.writer(obj, delimiter='|')
+
+            print("code || name || price || quantity")
+            c.execute("select * from stock")
+            for row in c:
+                print(row)
+
+            obj.close()
+            obj_read = open("sales.csv", "r", newline='')
+            try:
+                csv.reader(obj_read, delimiter='|')
+            except:
+                obj_read.close()
+
+        elif s == 4:
+            break
+        else:
+            print("invalid choice in customer menu")
+
+#  Main program loop 
+while True:
+    print("""
+1. Admin
+2. Customer
+3. Exit
+""")
+    ch = int(input("enter your choice: "))
+    if ch == 1:
+        ps = input("password: ")
+
+        #  check password once 
+        c.execute("select * from login")
+        for i in c:
+            if i[1] == ps:
+                print("welcome admin")
+                admin_menu()
+            else:
+                print("wrong password")
+
+    elif ch == 2:
+        customer_section()
+
+    elif ch == 3:
+        print("Exiting program.")
+        break
+    else:
+        print("invalid choice")
